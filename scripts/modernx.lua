@@ -98,6 +98,7 @@ local user_opts = {
     showontop = true,               -- show window on top button
     showinfo = false,               -- show the info button
     downloadbutton = true,          -- show download button for web videos
+    screenshotbutton = false,        -- show screenshot button
     downloadpath = "~~desktop/mpv/downloads", -- the download path for videos
     showyoutubecomments = false,    -- EXPERIMENTAL - not ready
     commentsdownloadpath = "~~desktop/mpv/downloads/comments", -- the download path for the comment JSON file
@@ -136,6 +137,7 @@ local icons = {
   downloading = '\239\134\185',
   ontopon = '\239\142\150',
   ontopoff = '\239\142\149',
+  screenshot = ''
 }
 
 local emoticon = {
@@ -1694,7 +1696,11 @@ function exec_dislikes(args, result)
         end
 
         if (not state.descriptionLoaded) then
-            state.localDescriptionClick = state.localDescriptionClick .. '\\N' .. state.dislikes
+            if state.localDescriptionClick then
+                state.localDescriptionClick = state.localDescriptionClick .. '\\N' .. state.dislikes
+            else
+                state.localDescriptionClick = state.dislikes
+            end
             state.videoDescription = state.localDescriptionClick
         else
             addLikeCountToTitle()
@@ -1714,7 +1720,7 @@ function commas(number)
  end
 
 function addLikeCountToTitle()
-    if (user_opts.updatetitleyoutubestats) then
+    if (user_opts.showdescription and user_opts.updatetitleyoutubestats) then
         state.viewcount = commas(state.localDescriptionClick:match('Views: (%d+)')) 
         state.likecount = commas(state.localDescriptionClick:match('Likes: (%d+)'))
         if (state.viewcount ~= '' and state.likecount ~= '' and state.dislikecount) then
@@ -2265,6 +2271,7 @@ layouts = function ()
     local showloop = user_opts.showloop
     local showinfo = user_opts.showinfo
     local showontop = user_opts.showontop
+    local showscreenshot = user_opts.screenshotbutton
 
     if user_opts.compactmode then
         user_opts.showjump = false
@@ -2388,7 +2395,7 @@ layouts = function ()
 
     if showontop then
         lo = add_layout('tog_ontop')
-        lo.geometry = {x = osc_geo.w - 127 + (showloop and 0 or 50), y = refY - 40, an = 5, w = 24, h = 24}
+        lo.geometry = {x = osc_geo.w - 127 + (showloop and 0 or 45), y = refY - 40, an = 5, w = 24, h = 24}
         lo.style = osc_styles.Ctrl3
         lo.visible = (osc_param.playresx >= 700 - outeroffset)
     end
@@ -2402,14 +2409,21 @@ layouts = function ()
 
     if showinfo then
         lo = add_layout('tog_info')
-        lo.geometry = {x = osc_geo.w - 172 + (showloop and 0 or 50) + (showontop and 0 or 50), y = refY - 40, an = 5, w = 24, h = 24}
+        lo.geometry = {x = osc_geo.w - 172 + (showloop and 0 or 45) + (showontop and 0 or 45), y = refY - 40, an = 5, w = 24, h = 24}
         lo.style = osc_styles.Ctrl3
         lo.visible = (osc_param.playresx >= 500 - outeroffset)
     end
 
+    if showscreenshot then
+        lo = add_layout('screenshot')
+        lo.geometry = {x = osc_geo.w - 217 + (showloop and 0 or 45) + (showontop and 0 or 45) + (showinfo and 0 or 45), y = refY - 40, an = 5, w = 24, h = 24}
+        lo.style = osc_styles.Ctrl3
+        lo.visible = (osc_param.playresx >= 300 - outeroffset)
+    end
+
     if user_opts.downloadbutton then
         lo = add_layout('download')
-        lo.geometry = {x = osc_geo.w - 217 + (showloop and 0 or 50) + (showontop and 0 or 50) + (showinfo and 0 or 50), y = refY - 40, an = 5, w = 24, h = 24}
+        lo.geometry = {x = osc_geo.w - 262 + (showloop and 0 or 45) + (showontop and 0 or 45) + (showinfo and 0 or 45) + (showscreenshot and 0 or 45), y = refY - 40, an = 5, w = 24, h = 24}
         lo.style = osc_styles.Ctrl3
         lo.visible = (osc_param.playresx >= 400 - outeroffset)
     end
@@ -2871,7 +2885,7 @@ function osc_init()
             return (icons.download)
         end
     end
-    ne.visible = (osc_param.playresx >= 900 - outeroffset - (user_opts.showloop and 0 or 100) - (user_opts.showontop and 0 or 100) - (user_opts.showinfo and 0 or 100)) and state.isWebVideo
+    ne.visible = (osc_param.playresx >= 1100 - outeroffset - (user_opts.showloop and 0 or 100) - (user_opts.showontop and 0 or 100) - (user_opts.showinfo and 0 or 100) - (user_opts.showscreenshot and 0 or 100)) and state.isWebVideo
     ne.tooltip_style = osc_styles.Tooltip
     ne.tooltipF = function ()
         local msg = state.fileSizeNormalised
@@ -2943,6 +2957,18 @@ function osc_init()
             else
                 show_message("\\N{\\an9}Can't be downloaded")
             end
+        end
+
+    --screenshot
+    ne = new_element('screenshot', 'button')
+    ne.content = icons.screenshot
+    ne.visible = (osc_param.playresx >= 900 - outeroffset - (user_opts.showloop and 0 or 100) - (user_opts.showontop and 0 or 100) - (user_opts.showinfo and 0 or 100))
+    ne.eventresponder['mbtn_left_up'] =
+        function ()
+            local tempSubPosition = mp.get_property('sub-pos')
+            mp.commandv('set', 'sub-pos', 100)
+            mp.command('screenshot') -- this takes screenshots with subs, remove video to take screenshots without subs
+            mp.commandv('set', 'sub-pos', tempSubPosition)
         end
 
     --tog_info
@@ -3067,15 +3093,15 @@ function osc_init()
             end
 
         end
-    ne.eventresponder['mbtn_left_down'] =
-        function (element)
-            element.state.mbtnleft = true
-            mp.commandv('seek', get_slider_value(element), 'absolute-percent')
-        end
-    ne.eventresponder['shift+mbtn_left_down'] = --exact seeks on shift + left click
+    ne.eventresponder['mbtn_left_down'] = --exact seeks on left click
         function (element)
             element.state.mbtnleft = true
             mp.commandv('seek', get_slider_value(element), 'absolute-percent', 'exact')
+        end
+    ne.eventresponder['shift+mbtn_left_down'] = --keyframe seeks on shift+left click
+        function (element)
+            element.state.mbtnleft = true
+            mp.commandv('seek', get_slider_value(element), 'absolute-percent')
         end
     ne.eventresponder['mbtn_left_up'] =
         function (element)
